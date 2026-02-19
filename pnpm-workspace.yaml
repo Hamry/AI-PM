@@ -1,0 +1,8 @@
+packages:
+  - "apps/*" # For web and desktop
+  - "shared-ui" # Your React component library
+#  - "fractalist-core" # Your Rust library folder (Logic)
+#  - "cloud-api" # Your Rust server
+
+catalog:
+  typescript: "~5.9.3"

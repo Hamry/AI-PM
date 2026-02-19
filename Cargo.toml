@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "fractalist-core",
+    "apps/desktop/src-tauri",
+    "cloud-api"
+]
+
+resolver = "2"

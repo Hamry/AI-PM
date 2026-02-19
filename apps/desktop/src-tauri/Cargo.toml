@@ -1,0 +1,16 @@
+[package]
+name = "src-tauri"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.tauri]
+
+
+[dependencies]
+tauri = { version = "2", features = [] }
+fractalist-core = { path = "../../../fractalist-core" }
+tauri-specta = { version = "2.0.0-rc.21", features = ["derive", "typescript"] }
+specta-typescript = "0.0.9"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

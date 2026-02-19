@@ -1,0 +1,21 @@
+{
+  "productName": "Fractalist",
+  "version": "0.1.0",
+  "identifier": "com.fractalist.app",
+  "build": {
+    "beforeDevCommand": "pnpm --filter web dev",
+    "beforeBuildCommand": "pnpm --filter web build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../../web/dist"
+  },
+
+  "app": {
+    "windows": [{ "title": "Fractalist", "width": 1200, "height": 800 }],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.ico", "icons/icon.png"]
+  }
+}

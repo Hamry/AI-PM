@@ -1,0 +1,10 @@
+[package]
+name = "cloud-api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# We point to the local folder instead of a version number
+fractalist-core = { path = "../fractalist-core" }
+axum = "0.7" 
+tokio = { version = "1.0", features = ["full"] }

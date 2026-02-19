@@ -1,0 +1,9 @@
+[package]
+name = "fractalist-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+specta = { version = "=2.0.0-rc.22", features = ["derive", "export"] }
+specta-typescript = "0.0.9"

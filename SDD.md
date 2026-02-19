@@ -52,6 +52,8 @@ Start with web app. Main ui should have a todo list, some sort of task selection
 * **LLM Integration:** Utilize high-speed LLM APIs (e.g., Gemini) for:
     * **Task Factoring:** Breaking "Epic" tasks into sub-tasks.
     * **Categorization:** Labeling tasks (e.g., "Deep Work," "Administrative") to refine future predictions based on historical performance in those categories.
+    * **Task Predition:** Embedding and predicting task length based on description and previous tasks.
+
 
 ### **5. The "Pacer" Mechanism (Behavioral Optimization)**
 * **Decision:** Implement a dynamic "Push & Backoff" algorithm for task estimates to incrementally improve user velocity.
