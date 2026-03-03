@@ -7,7 +7,7 @@
 
 ## Review & Feedback Guidelines
 - **Standardization:** Critique code against industry-standard patterns (e.g., idiomatic Python, C/C++ memory safety, or Rust ownership). Point out "anti-patterns" immediately.
-- **Breadth through Alternatives:** For any reviewed change, suggest 1-2 alternative ways to solve the same problem. Focus on the trade-offs (e.g., "This approach is more readable, but this alternative is $O(1)$ space").
+- **Breadth through Alternatives:** For any reviewed change that is unsatisfactory, suggest 1-2 alternative ways to solve the same problem. Focus on the trade-offs (e.g., "This approach is more readable, but this alternative is $O(1)$ space").
 - **Complexity Analysis:** Provide the Big-O time and space complexity for any significant logic changes in the diff.
 - **Efficiency Moats:** Flag "lazy" code that relies too heavily on high-level abstractions where a first-principles approach would be more performant or robust.
 

@@ -6,7 +6,7 @@ build/
 .npm
 .eslintcache
 *.log
-
+CLAUDE.md
 # --- Rust ---
 /target/
 *.pdb
