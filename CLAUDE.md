@@ -17,4 +17,13 @@
     - Audit the `git diff` for logic errors, safety risks, and standards violations.
     - List 1-2 "Standard improvements" (better naming, cleaner syntax).
     - Propose 1 "Alternative architecture" to expand my technical perspective.
-3. **Execution:** I manually refactor based on the discussion. No auto-applying changes.
+3. **Execution:** I manually refactor based on the discussion. No auto-applying changes. (Only exception to this is documentation changes)
+
+## Project-Specific Architecture Decisions
+
+### `fractalist-core` (Rust)
+- **`TaskEngine` trait** uses `async_trait` crate + `Send + Sync` bounds. This is a deliberate object-safety decision so the trait can be stored as `Box<dyn TaskEngine>` in Tauri state. Do not suggest removing `async_trait` or switching to bare `async fn` in trait without re-examining object safety.
+- **`DummyTaskEngine`** is `pub` intentionally — used by the Tauri desktop app during development. Future plan: gate behind `features = ["testing"]` in `Cargo.toml`.
+- **`TaskId`** is a newtype `(u32)` with a private field. Construction outside the module must go through `TaskId::new()`. Manual `Deserialize` impl exists because `serde` cannot auto-derive it when the inner field is private.
+- **Error types** (`TaskEngineError`) use `thiserror`. They must NOT derive `Serialize/Deserialize/specta::Type` — they are internal errors, not frontend-facing data models.
+- **Type export**: `cargo run -p fractalist-core --bin export-types` regenerates `shared-ui/src/types/bindings.ts`. Must be run from workspace root.
