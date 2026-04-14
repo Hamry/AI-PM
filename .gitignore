@@ -11,6 +11,11 @@ CLAUDE.md
 /target/
 *.pdb
 
+# --- SQLite ---
+*.db
+*.db-shm
+*.db-wal
+
 # --- Tauri ---
 apps/desktop/src-tauri/gen/
 
@@ -28,3 +33,5 @@ Thumbs.db
 # --- Testing ---
 /coverage
 .nyc_output
+
+CLAUDE.md

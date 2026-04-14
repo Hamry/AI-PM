@@ -27,3 +27,11 @@
 - **`TaskId`** is a newtype `(u32)` with a private field. Construction outside the module must go through `TaskId::new()`. Manual `Deserialize` impl exists because `serde` cannot auto-derive it when the inner field is private.
 - **Error types** (`TaskEngineError`) use `thiserror`. They must NOT derive `Serialize/Deserialize/specta::Type` — they are internal errors, not frontend-facing data models.
 - **Type export**: `cargo run -p fractalist-core --bin export-types` regenerates `shared-ui/src/types/bindings.ts`. Must be run from workspace root.
+
+### `cloud-api` (Rust / Axum)
+- **Database**: SQLite locally via `sqlx` (async, compile-time checked queries). Migrating to PostgreSQL RDS for production — schema is intentionally compatible with both.
+- **`AppState`**: holds a `sqlx::SqlitePool` (or `PgPool` in prod). The in-memory `Arc<Mutex<Vec<Task>>>` is a temporary stub and will be removed once the DB layer is wired in.
+- **ID assignment**: `TaskId` is assigned by the DB via `SERIAL` / `INTEGER PRIMARY KEY AUTOINCREMENT`. The API receives a `TaskDraft` (no ID), inserts it, and reads back the generated ID via `RETURNING id` (Postgres) or `last_insert_rowid()` (SQLite).
+- **Schema**: flat `tasks` table with a self-referential `parent_id` column. Tree retrieval uses a single `WITH RECURSIVE` CTE — do not fetch children with N+1 queries.
+- **Write path**: only `TaskDraft` is ever sent by the client. `Task` (with ID and status) is only ever returned by the server.
+- **Auth**: Clerk (JWT-based). Frontend uses `@clerk/clerk-react`. Backend validates Clerk JWTs in Axum middleware — extract `clerk_id` from claims, look up internal `user_id` in DB. Do not roll custom session logic.

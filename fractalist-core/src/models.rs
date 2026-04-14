@@ -11,7 +11,7 @@ pub enum TaskEngineError {
     EstimationFailed(String),
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub enum TaskStatus {
     PendingReview,
     Todo,
@@ -20,7 +20,7 @@ pub enum TaskStatus {
     Archived, // For "deleting" without losing data
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Task {
     pub id: TaskId, // Use a Newtype for ID safety
     pub title: String,
@@ -32,7 +32,7 @@ pub struct Task {
     pub metadata: TaskMetadata,
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct TaskDraft {
     pub title: String,
     pub description: String,
@@ -42,13 +42,13 @@ pub struct TaskDraft {
     pub metadata: TaskMetadata,
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct TaskMetadata {
     pub tags: Vec<String>,       // e.g., "coding", "high-focus"
     pub derived_from: SourceRef, // Link to a chat ID or source
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Estimation {
     pub predicted_minutes: u32,
     pub confidence_score: f64, // 0.0 to 1.0 (from your SLM)
@@ -75,7 +75,7 @@ impl<'de> serde::Deserialize<'de> for TaskId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct SourceRef {
     pub chat_id: u32,
 }

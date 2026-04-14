@@ -30,6 +30,7 @@ AI-PM/
 | pnpm      | 10.6.5    | `npm install -g pnpm@10.6.5` |
 | Rust      | stable    | https://rustup.rs            |
 | Tauri CLI | v2        | installed as devDependency   |
+| sqlx-cli  | latest    | `cargo install sqlx-cli --no-default-features --features sqlite` |
 
 ---
 
@@ -96,6 +97,9 @@ cargo run -p fractalist-core --bin export-types
 
 # Run the cloud API locally
 cargo run -p cloud-api
+
+# Run DB migrations (from workspace root, requires sqlx-cli)
+sqlx migrate run --database-url sqlite://cloud-api/fractalist.db
 ```
 
 ---
@@ -108,3 +112,7 @@ cargo run -p cloud-api
 - **Rust types → TypeScript**: `fractalist-core` uses [specta](https://github.com/oscartbeaumont/specta) to export TypeScript types automatically. Run `cargo run -p fractalist-core --bin export-types` from the workspace root to regenerate `shared-ui/src/types/bindings.ts`.
 - **`TaskEngine` trait**: defined in `fractalist-core/src/lib.rs`. Uses `async_trait` for object safety and `Send + Sync` bounds for Tauri state compatibility. `DummyTaskEngine` is the stub implementation — `pub` intentionally so the Tauri app can use it during development.
 - **Error handling**: engine errors use `thiserror` (`TaskEngineError` in `models.rs`). Do not derive `Serialize/Deserialize/Type` on error enums — they are internal, not frontend-facing types.
+- **Database**: `cloud-api` uses SQLite locally via `sqlx`. The DB file (`fractalist.db`) is gitignored. Run migrations with `sqlx migrate run` before starting the API. Schema uses a self-referential `tasks` table — tree queries use `WITH RECURSIVE`.
+- **Write path**: clients send `TaskDraft` (no ID). The server inserts, reads back the DB-generated ID, and returns a full `Task`.
+
+- **Auth**: Clerk (JWT-based). Frontend: `@clerk/clerk-react`. Backend validates the JWT in Axum middleware, extracts `clerk_id`, maps to internal `user_id`. Users table stores `clerk_id TEXT UNIQUE` as the link between Clerk identity and app data.

@@ -65,8 +65,16 @@ Start with web app. Main ui should have a todo list, some sort of task selection
 
 ## **Technical Overview**
 Frontend:
-S3 + Cloudfront serving compiled typescript react \
+S3 + Cloudfront serving compiled TypeScript React
+
 Backend:
-Lambda functions \
-Database: PostgreSQL RDS 
+Rust / Axum — deployed as a long-running binary on a cheap VPS (e.g. Fly.io, Railway, Render).
+Lambda was evaluated and rejected: incompatible with SQLite (ephemeral filesystem), and RDS Proxy overhead is unjustified at this stage.
+
+Database:
+SQLite locally (via `sqlx`). Migrate to PostgreSQL when deploying to VPS — same `sqlx` queries, driver swap only.
+
+Auth:
+Clerk (JWT-based). Deployment-agnostic, React SDK for frontend, one validation middleware on the Axum side.
+Cognito was considered but rejected — its advantages are tied to the AWS ecosystem, which no longer applies without Lambda/RDS.
 
