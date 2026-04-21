@@ -20,6 +20,20 @@ pub enum TaskStatus {
     Archived, // For "deleting" without losing data
 }
 
+impl std::str::FromStr for TaskStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "PendingReview" => Ok(Self::PendingReview),
+            "Todo" => Ok(Self::Todo),
+            "InProgress" => Ok(Self::InProgress),
+            "Completed" => Ok(Self::Completed),
+            "Archived" => Ok(Self::Archived),
+            _ => Err(format!("failed to parse status {}!", s)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Task {
     pub id: TaskId, // Use a Newtype for ID safety
@@ -38,7 +52,7 @@ pub struct TaskDraft {
     pub description: String,
     pub due_date: Option<DateTime<Utc>>,
     pub estimation: Option<Estimation>,
-    pub parent_id: TaskId,
+    pub parent_id: Option<TaskId>,
     pub metadata: TaskMetadata,
 }
 

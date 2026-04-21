@@ -19,7 +19,7 @@ impl TaskEngine for DummyTaskEngine {
         Ok(vec![TaskDraft {
             title: String::from("Subtask A"),
             description: format!("Subtask A of: {}", task.title),
-            parent_id: task.id,
+            parent_id: Some(task.id),
             metadata: TaskMetadata {
                 tags: vec![String::from("tests"), String::from("coding")],
                 derived_from: SourceRef { chat_id: 15 },
