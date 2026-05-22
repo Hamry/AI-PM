@@ -1,52 +1,53 @@
 import React from "react";
+import * as NavigationMenu from "@radix-ui/react-navigation-menu";
 
-export function Navbar() {
+interface NavLink {
+  label: string;
+  href: string;
+  active?: boolean;
+}
+
+interface NavbarProps {
+  authSlot?: React.ReactNode;
+  links?: NavLink[];
+}
+
+const DEFAULT_LINKS: NavLink[] = [
+  { label: "Features", href: "#" },
+  { label: "Pricing", href: "#" },
+  { label: "About", href: "#" },
+];
+
+export function Navbar({ authSlot, links }: NavbarProps) {
+  const navLinks = links ?? DEFAULT_LINKS;
+
   return (
-    <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-6 py-4 lg:px-20">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center size-10 bg-primary rounded-lg text-background-dark">
-          <span className="material-symbols-outlined text-2xl font-bold">
-            account_tree
-          </span>
-        </div>
-        <h2 className="text-slate-900 dark:text-slate-100 text-xl font-extrabold tracking-tight">
-          Fractalist
-        </h2>
+    <header className="flex h-14 items-center justify-between px-6 border-b border-border bg-surface shrink-0">
+      <div className="flex items-center gap-2">
+        <span className="material-symbols-outlined text-primary text-xl">account_tree</span>
+        <span className="text-text-primary font-bold text-base">Fractalist</span>
       </div>
-      <nav className="hidden md:flex flex-1 justify-center gap-10">
-        <a
-          className="text-slate-600 dark:text-slate-400 text-sm font-semibold hover:text-primary transition-colors"
-          href="#"
-        >
-          Features
-        </a>
-        <a
-          className="text-slate-600 dark:text-slate-400 text-sm font-semibold hover:text-primary transition-colors"
-          href="#"
-        >
-          Pricing
-        </a>
-        <a
-          className="text-slate-600 dark:text-slate-400 text-sm font-semibold hover:text-primary transition-colors"
-          href="#"
-        >
-          About
-        </a>
-        <a
-          className="text-slate-600 dark:text-slate-400 text-sm font-semibold hover:text-primary transition-colors"
-          href="#"
-        >
-          Blog
-        </a>
-      </nav>
-      <div className="flex items-center gap-3">
-        <button className="hidden sm:flex min-w-[100px] cursor-pointer items-center justify-center rounded-lg h-10 px-5 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm font-bold transition-all hover:bg-slate-200 dark:hover:bg-slate-700">
-          Log In
-        </button>
-        <button className="flex min-w-[120px] cursor-pointer items-center justify-center rounded-lg h-10 px-5 bg-primary text-background-dark text-sm font-bold transition-all hover:opacity-90 shadow-sm shadow-primary/20">
-          Get Started
-        </button>
-      </div>
+
+      <NavigationMenu.Root>
+        <NavigationMenu.List className="flex items-center gap-1">
+          {navLinks.map((link) => (
+            <NavigationMenu.Item key={link.label}>
+              <NavigationMenu.Link
+                href={link.href}
+                className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors block ${
+                  link.active
+                    ? "text-text-primary bg-surface-muted font-semibold"
+                    : "text-text-secondary hover:text-text-primary hover:bg-surface-muted"
+                }`}
+              >
+                {link.label}
+              </NavigationMenu.Link>
+            </NavigationMenu.Item>
+          ))}
+        </NavigationMenu.List>
+      </NavigationMenu.Root>
+
+      <div className="flex items-center gap-3">{authSlot}</div>
     </header>
   );
 }

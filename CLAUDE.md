@@ -30,8 +30,46 @@
 
 ### `cloud-api` (Rust / Axum)
 - **Database**: SQLite locally via `sqlx` (async, compile-time checked queries). Migrating to PostgreSQL RDS for production — schema is intentionally compatible with both.
-- **`AppState`**: holds a `sqlx::SqlitePool` (or `PgPool` in prod). The in-memory `Arc<Mutex<Vec<Task>>>` is a temporary stub and will be removed once the DB layer is wired in.
+- **`AppState`**: holds a `sqlx::SqlitePool` (or `PgPool` in prod). The in-memory `Arc<Mutex<Vec<Task>>>` has been removed — DB layer is live.
 - **ID assignment**: `TaskId` is assigned by the DB via `SERIAL` / `INTEGER PRIMARY KEY AUTOINCREMENT`. The API receives a `TaskDraft` (no ID), inserts it, and reads back the generated ID via `RETURNING id` (Postgres) or `last_insert_rowid()` (SQLite).
 - **Schema**: flat `tasks` table with a self-referential `parent_id` column. Tree retrieval uses a single `WITH RECURSIVE` CTE — do not fetch children with N+1 queries.
 - **Write path**: only `TaskDraft` is ever sent by the client. `Task` (with ID and status) is only ever returned by the server.
-- **Auth**: Clerk (JWT-based). Frontend uses `@clerk/clerk-react`. Backend validates Clerk JWTs in Axum middleware — extract `clerk_id` from claims, look up internal `user_id` in DB. Do not roll custom session logic.
+- **Auth**: Clerk (JWT-based). Frontend uses `@clerk/react` (v6+, NOT the old `@clerk/clerk-react`). Backend validates Clerk JWTs in Axum middleware — extract `clerk_id` from claims, look up internal `user_id` in DB. Do not roll custom session logic.
+- **DB path**: read from `DATABASE_URL` env var via `dotenvy`. Falls back to `sqlite://tasks.db?mode=rwc` for local dev. `.env` file lives at `cloud-api/.env`.
+- **Error handling**: `db.rs` uses `anyhow::Error` throughout. All `i64 -> u32` casts use `u32::try_from(...).map_err(...)` — never `as u32`. `TaskStatus` has a `FromStr` impl with `type Err = String`.
+- **Observability**: `tracing-subscriber` with `EnvFilter` initialized first in `main()`. All handlers log errors with `tracing::error!("{:?}", e)` before returning 500. `TraceLayer::new_for_http()` wraps the router for per-request spans.
+
+### `apps/web` (React / Vite)
+- **Router**: TanStack Router (file-based, `@tanstack/react-router` + `@tanstack/router-plugin`). Vite plugin `tanstackRouter()` must be listed before `react()` in `vite.config.ts`.
+- **Auth**: `ClerkProvider` wraps `RouterProvider` in `main.tsx`. Key read from `VITE_CLERK_PUBLISHABLE_KEY` in `apps/web/.env.local`.
+- **Clerk + shared-ui boundary**: Clerk hooks (`useUser`, `UserButton`, `SignInButton`) must NOT be used inside `shared-ui`. Instead, `shared-ui` components accept an `authSlot?: React.ReactNode` prop. `apps/web` fills the slot with Clerk components.
+- **Route structure**: `__root.tsx` (layout with AppNavbar + Outlet) -> `index.tsx` (public landing) -> `_auth.tsx` (pathless auth guard layout) -> `_auth/dashboard.tsx` (protected).
+- **API calls**: live in `apps/web/src/api/`. Clerk session token attached to requests via `useAuth().getToken()`.
+
+### `apps/desktop` (Tauri)
+- **v1 auth strategy**: requires internet. Uses `@clerk/react` same as web — Tauri's WebView persists the Clerk session in `localStorage` between app launches. Session auto-refreshes when online. No offline queue in v1.
+- **v2 auth strategy (future)**: offline-first with local SQLite sync. Writes go to local DB first (`sync_status: synced | pending | conflict`), background sync flushes to cloud API on reconnect. Server-wins conflict resolution for v1 of sync.
+- **`DummyTaskEngine`**: still used in desktop dev. Will be gated behind `features = ["testing"]` before shipping.
+
+## Tanstack Docs
+
+Before working on a Tanstack feature, check the docs via `npx nia-docs https://tanstack.com/router/latest`.
+
+```bash
+# Search for a topic
+npx nia-docs https://tanstack.com/router/latest -c "grep -rl 'auth' ."
+
+# Read a specific page
+npx nia-docs https://tanstack.com/router/latest -c "cat getting-started.md"
+
+# Find all guides
+npx nia-docs https://tanstack.com/router/latest -c "find . -name '*.md'"
+
+# List top-level structure
+npx nia-docs https://tanstack.com/router/latest -c "tree -L 1"
+
+# Browse interactively
+npx nia-docs https://tanstack.com/router/latest
+```
+
+The shell starts in the docs root. Use `.` for relative paths — all standard Unix tools work (grep, find, cat, tree, ls, head, tail, wc).

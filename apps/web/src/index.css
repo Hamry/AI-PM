@@ -7,6 +7,14 @@
   --color-background-light: #f6f8f6;
   --color-background-dark: #152210;
   --font-display: "Inter", sans-serif;
+
+  --color-surface:         #ffffff;
+  --color-surface-muted:   #f0f4f0;
+  --color-border:          #e2e8e2;
+  --color-text-primary:    #1a2e1a;
+  --color-text-secondary:  #5a7a5a;
+  --color-text-muted:      #8fa88f;
+  --color-focus-red:       #ef4444;
 }
 
 body {

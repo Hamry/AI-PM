@@ -1,7 +1,11 @@
-// shared-ui/src/index.ts
 export { Navbar } from "./components/Navbar";
+export { TaskCard } from "./components/TaskCard";
+export { Sidebar } from "./components/Sidebar";
+export { FocusTimer } from "./components/FocusTimer";
 export { HeroSection } from "./components/HeroSection";
 export { FeaturesSection } from "./components/FeaturesSection";
 export { CtaSection } from "./components/CtaSection";
 export { Footer } from "./components/Footer";
 export { LandingPage } from "./pages/LandingPage";
+export { DashboardLayout } from "./pages/DashboardLayout";
+export type { Task, TaskStatus, TaskId, TaskMetadata, Estimation, TaskDraft } from "./types/bindings";
