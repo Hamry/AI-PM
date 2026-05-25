@@ -1,5 +1,5 @@
 use fractalist_core::models::{
-    Estimation, SourceRef, Task, TaskDraft, TaskId, TaskMetadata, TaskStatus,
+    Estimation, SourceRef, Task, TaskDraft, TaskId, TaskMetadata, TaskStatus, TaskUpdate,
 };
 use sqlx::SqlitePool;
 
@@ -9,7 +9,7 @@ struct TaskRow {
     parent_id: Option<i64>,
     title: String,
     description: String,
-    status: String, // "Todo", "InProgress", etc.
+    status: TaskStatus, // "Todo", "InProgress", etc.
     due_date: Option<chrono::DateTime<chrono::Utc>>,
     estimation_minutes: Option<i64>,
     confidence_score: Option<f64>,
@@ -52,7 +52,7 @@ impl TryFrom<TaskRow> for Task {
                 .transpose()?,
             title: row.title,
             description: row.description,
-            status: row.status.parse().map_err(|e: String| anyhow::anyhow!(e))?,
+            status: row.status,
             due_date: row.due_date,
             estimation,
             metadata: TaskMetadata {
@@ -119,4 +119,59 @@ pub async fn get_task(pool: &SqlitePool, id: u32) -> Result<Option<Task>, anyhow
     row.map(Task::try_from)
         .transpose()
         .map_err(anyhow::Error::from)
+}
+
+pub async fn update_task(
+    pool: &SqlitePool,
+    id: u32,
+    updated: TaskUpdate,
+) -> Result<Task, anyhow::Error> {
+    let current = get_task(pool, id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("task {} not found", id))?;
+
+    let new_title = updated.title.unwrap_or(current.title);
+    let new_description = updated.description.unwrap_or(current.description);
+    let new_status = updated.status.unwrap_or(current.status);
+    let new_due_date = updated.due_date.or(current.due_date); // for Option<T> fields, use .or() not .unwrap_or()
+
+    let new_estimation = updated.estimation.or(current.estimation);
+
+    let new_metadata = updated.metadata.unwrap_or(current.metadata);
+    let new_metadata_tags = serde_json::to_string(&new_metadata.tags)?;
+    let new_metadata_chat_id = new_metadata.derived_from.chat_id as i64;
+    let new_parent_id = updated.parent_id.or(current.parent_id);
+
+    sqlx::query(
+        "UPDATE tasks SET title = ?, description = ?, status = ?, due_date = ?, estimation_minutes = ?,
+    confidence_score = ?,
+    estimation_updated = ?,
+    metadata_tags = ?,
+    metadata_chat_id = ? , parent_id = ?  WHERE id = ?",
+    )
+    .bind(new_title)
+    .bind(new_description)
+    .bind(new_status)
+    .bind(new_due_date)
+    .bind(new_estimation.as_ref().map(|e| e.predicted_minutes as i64))
+    .bind(new_estimation.as_ref().map(|e| e.confidence_score))
+    .bind(new_estimation.as_ref().map(|e| e.last_updated))
+    .bind(&new_metadata_tags)
+    .bind(new_metadata_chat_id as i64)
+    .bind(new_parent_id.map(|p| p.value() as i64))
+    .bind(id as i64)
+    .execute(pool)
+    .await?;
+
+    get_task(pool, id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("task not found after update"))
+}
+
+pub async fn delete_task(pool: &SqlitePool, id: u32) -> Result<bool, anyhow::Error> {
+    let result = sqlx::query("DELETE FROM tasks WHERE id = ?")
+        .bind(id as i64)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected() > 0)
 }

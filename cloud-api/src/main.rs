@@ -4,9 +4,9 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{delete, get, patch, post},
 };
-use fractalist_core::models::TaskDraft;
+use fractalist_core::models::{TaskDraft, TaskUpdate};
 pub mod db;
 use tower_http::trace::TraceLayer;
 
@@ -50,6 +50,31 @@ async fn get_task(State(state): State<AppState>, Path(id): Path<u32>) -> impl In
     }
 }
 
+async fn update_task(
+    State(state): State<AppState>,
+    Path(id): Path<u32>,
+    Json(update): Json<TaskUpdate>,
+) -> impl IntoResponse {
+    match db::update_task(&state.pool, id, update).await {
+        Ok(task) => Json(task).into_response(),
+        Err(e) => {
+            tracing::error!("update_task failed: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+async fn delete_task(State(state): State<AppState>, Path(id): Path<u32>) -> impl IntoResponse {
+    match db::delete_task(&state.pool, id).await {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            tracing::error!("delete_task failed: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
@@ -66,7 +91,10 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/tasks", get(list_tasks).post(create_task))
-        .route("/tasks/:id", get(get_task))
+        .route(
+            "/tasks/:id",
+            get(get_task).patch(update_task).delete(delte_task),
+        )
         .with_state(state)
         .layer(TraceLayer::new_for_http());
 

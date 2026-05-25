@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-
 #[derive(Debug, thiserror::Error)]
 pub enum TaskEngineError {
     #[error("breakdown failed: {0}")]
@@ -34,6 +33,47 @@ impl std::str::FromStr for TaskStatus {
     }
 }
 
+impl std::fmt::Display for TaskStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::PendingReview => "PendingReview",
+            Self::Todo => "Todo",
+            Self::InProgress => "InProgress",
+            Self::Completed => "Completed",
+            Self::Archived => "Archived",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl sqlx::Type<sqlx::Sqlite> for TaskStatus {
+    fn type_info() -> <sqlx::Sqlite as sqlx::Database>::TypeInfo {
+        <String as sqlx::Type<sqlx::Sqlite>>::type_info()
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl<'q> sqlx::Encode<'q, sqlx::Sqlite> for TaskStatus {
+    fn encode_by_ref(
+        &self,
+        buf: &mut <sqlx::Sqlite as sqlx::Database>::ArgumentBuffer<'q>,
+    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+        <String as sqlx::Encode<'q, sqlx::Sqlite>>::encode_by_ref(&self.to_string(), buf)
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl<'r> sqlx::Decode<'r, sqlx::Sqlite> for TaskStatus {
+    fn decode(
+        value: <sqlx::Sqlite as sqlx::Database>::ValueRef<'r>,
+    ) -> Result<Self, sqlx::error::BoxDynError> {
+        // read the raw string from the DB, then parse via your existing FromStr
+        let s = <String as sqlx::Decode<sqlx::Sqlite>>::decode(value)?;
+        s.parse::<TaskStatus>().map_err(|e: String| e.into())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Task {
     pub id: TaskId, // Use a Newtype for ID safety
@@ -54,6 +94,17 @@ pub struct TaskDraft {
     pub estimation: Option<Estimation>,
     pub parent_id: Option<TaskId>,
     pub metadata: TaskMetadata,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct TaskUpdate {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<TaskStatus>,
+    pub due_date: Option<DateTime<Utc>>,
+    pub estimation: Option<Estimation>, // A separate struct for time logic
+    pub parent_id: Option<TaskId>,      // Flat structure for easier DB syncing
+    pub metadata: Option<TaskMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
