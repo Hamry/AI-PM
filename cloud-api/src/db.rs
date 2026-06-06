@@ -67,12 +67,13 @@ impl TryFrom<TaskRow> for Task {
     }
 }
 
-pub async fn list_tasks(pool: &SqlitePool) -> Result<Vec<Task>, anyhow::Error> {
+pub async fn list_tasks(pool: &SqlitePool, user_id: i64) -> Result<Vec<Task>, anyhow::Error> {
     let rows: Vec<TaskRow> = sqlx::query_as::<_, TaskRow>(
         "SELECT id, parent_id, title, description, status, due_date,
             estimation_minutes, confidence_score, estimation_updated,
-            metadata_tags, metadata_chat_id FROM tasks",
+            metadata_tags, metadata_chat_id FROM tasks WHERE user_id = ?",
     )
+    .bind(user_id)
     .fetch_all(pool)
     .await?;
 
@@ -82,37 +83,47 @@ pub async fn list_tasks(pool: &SqlitePool) -> Result<Vec<Task>, anyhow::Error> {
         .map_err(anyhow::Error::from)
 }
 
-pub async fn create_task(pool: &SqlitePool, draft: TaskDraft) -> Result<Task, anyhow::Error> {
+pub async fn create_task(
+    pool: &SqlitePool,
+    user_id: i64,
+    draft: TaskDraft,
+) -> Result<Task, anyhow::Error> {
     let tags_json = serde_json::to_string(&draft.metadata.tags)?;
     let parent_id = draft.parent_id.map(|p| p.value() as i64);
     let chat_id = draft.metadata.derived_from.chat_id as i64;
 
     let result = sqlx::query(
-        "INSERT INTO tasks (title, description, parent_id, metadata_tags, metadata_chat_id)
-        VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (title, description, parent_id, metadata_tags, metadata_chat_id, user_id)
+        VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(draft.title)
     .bind(draft.description)
     .bind(parent_id)
     .bind(tags_json)
     .bind(chat_id)
+    .bind(user_id)
     .execute(pool)
     .await?;
 
     let new_id = u32::try_from(result.last_insert_rowid())
         .map_err(|_| anyhow::anyhow!("task_id {} overflows u32", result.last_insert_rowid()))?;
-    get_task(pool, new_id)
+    get_task(pool, user_id, new_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("task not found after insert"))
 }
 
-pub async fn get_task(pool: &SqlitePool, id: u32) -> Result<Option<Task>, anyhow::Error> {
+pub async fn get_task(
+    pool: &SqlitePool,
+    user_id: i64,
+    id: u32,
+) -> Result<Option<Task>, anyhow::Error> {
     let row = sqlx::query_as::<_, TaskRow>(
         "SELECT id, parent_id, title, description, status, due_date,
             estimation_minutes, confidence_score, estimation_updated,
-            metadata_tags, metadata_chat_id FROM tasks WHERE id = ?",
+            metadata_tags, metadata_chat_id FROM tasks WHERE id = ? AND user_id = ?",
     )
     .bind(id as i64)
+    .bind(user_id)
     .fetch_optional(pool)
     .await?;
 
@@ -123,10 +134,11 @@ pub async fn get_task(pool: &SqlitePool, id: u32) -> Result<Option<Task>, anyhow
 
 pub async fn update_task(
     pool: &SqlitePool,
+    user_id: i64,
     id: u32,
     updated: TaskUpdate,
 ) -> Result<Task, anyhow::Error> {
-    let current = get_task(pool, id)
+    let current = get_task(pool, user_id, id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("task {} not found", id))?;
 
@@ -147,7 +159,7 @@ pub async fn update_task(
     confidence_score = ?,
     estimation_updated = ?,
     metadata_tags = ?,
-    metadata_chat_id = ? , parent_id = ?  WHERE id = ?",
+    metadata_chat_id = ? , parent_id = ?  WHERE id = ? AND user_id = ?",
     )
     .bind(new_title)
     .bind(new_description)
@@ -160,18 +172,38 @@ pub async fn update_task(
     .bind(new_metadata_chat_id as i64)
     .bind(new_parent_id.map(|p| p.value() as i64))
     .bind(id as i64)
+    .bind(user_id)
     .execute(pool)
     .await?;
 
-    get_task(pool, id)
+    get_task(pool, user_id, id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("task not found after update"))
 }
 
-pub async fn delete_task(pool: &SqlitePool, id: u32) -> Result<bool, anyhow::Error> {
-    let result = sqlx::query("DELETE FROM tasks WHERE id = ?")
+pub async fn delete_task(pool: &SqlitePool, user_id: i64, id: u32) -> Result<bool, anyhow::Error> {
+    let result = sqlx::query("DELETE FROM tasks WHERE id = ? AND user_id = ?")
         .bind(id as i64)
+        .bind(user_id)
         .execute(pool)
         .await?;
     Ok(result.rows_affected() > 0)
+}
+
+pub async fn get_or_create_user(pool: &SqlitePool, clerk_id: &str) -> Result<i64, anyhow::Error> {
+    sqlx::query("INSERT OR IGNORE INTO users (clerk_id) VALUES (?)")
+        .bind(clerk_id)
+        .execute(pool)
+        .await?;
+
+    let user_id: Option<i64> = sqlx::query_scalar("SELECT id FROM users WHERE clerk_id = ?")
+        .bind(clerk_id)
+        .fetch_optional(pool)
+        .await?;
+    user_id.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Failed to retrieve or create user with clerk_id {}",
+            clerk_id
+        )
+    })
 }

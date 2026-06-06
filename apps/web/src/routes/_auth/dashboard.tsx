@@ -10,6 +10,8 @@ import {
   type TaskStatus,
 } from "@fractalist/shared-ui";
 
+import { useAuth } from "@clerk/react";
+
 export const Route = createFileRoute("/_auth/dashboard")({
   component: RouteComponent,
 });
@@ -35,7 +37,11 @@ function makeTask(
 
 const MOCK_TASKS: Task[] = [
   makeTask(1, "Draft presentation for Q4 roadmap", "InProgress", {
-    estimation: { predicted_minutes: 25, confidence_score: 0.85, last_updated: "" },
+    estimation: {
+      predicted_minutes: 25,
+      confidence_score: 0.85,
+      last_updated: "",
+    },
     metadata: { tags: [], derived_from: "manual" },
   }),
   makeTask(2, "Research competitive dashboard layouts", "Todo", {
@@ -46,11 +52,19 @@ const MOCK_TASKS: Task[] = [
     metadata: { tags: [], derived_from: "manual" },
   }),
   makeTask(4, "Refine system architecture", "PendingReview", {
-    estimation: { predicted_minutes: 60, confidence_score: 0.7, last_updated: "" },
+    estimation: {
+      predicted_minutes: 60,
+      confidence_score: 0.7,
+      last_updated: "",
+    },
     metadata: { tags: ["DESIGN"], derived_from: "ai" },
   }),
   makeTask(5, "Developer feedback review", "Todo", {
-    estimation: { predicted_minutes: 30, confidence_score: 0.9, last_updated: "" },
+    estimation: {
+      predicted_minutes: 30,
+      confidence_score: 0.9,
+      last_updated: "",
+    },
     metadata: { tags: [], derived_from: "manual" },
   }),
   makeTask(6, "Review system documentation", "Completed", {
@@ -81,10 +95,24 @@ function RouteComponent() {
   const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<number>(1);
-  const [secondsRemaining, setSecondsRemaining] = useState(FOCUS_SESSION_SECONDS);
+  const [secondsRemaining, setSecondsRemaining] = useState(
+    FOCUS_SESSION_SECONDS
+  );
   const [timerRunning, setTimerRunning] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { getToken } = useAuth();
 
+  useEffect(() => {
+    async function loadTasks() {
+      const token = await getToken();
+      const res = await fetch("http://localhost:3000/tasks", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setTasks(data);
+    }
+    loadTasks();
+  }, []);
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(() => {
@@ -158,12 +186,16 @@ function RouteComponent() {
               <div>
                 <h1 className="text-xl font-bold text-text-primary">
                   {greeting},{" "}
-                  <span className="font-extrabold">{user?.firstName ?? "there"}</span>
+                  <span className="font-extrabold">
+                    {user?.firstName ?? "there"}
+                  </span>
                 </h1>
                 <p className="text-sm text-text-muted mt-0.5">{dateStr}</p>
               </div>
               <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-text-primary text-surface text-sm font-medium hover:opacity-90 transition-opacity">
-                <span className="material-symbols-outlined text-[16px]">add</span>
+                <span className="material-symbols-outlined text-[16px]">
+                  add
+                </span>
                 New Task
               </button>
             </div>
@@ -188,7 +220,9 @@ function RouteComponent() {
           <div className="flex flex-col gap-2 overflow-y-auto flex-1 pr-1">
             {displayedTasks.length === 0 && (
               <p className="text-text-muted text-sm py-12 text-center">
-                {activeTab === "completed" ? "No completed tasks yet." : "All caught up!"}
+                {activeTab === "completed"
+                  ? "No completed tasks yet."
+                  : "All caught up!"}
               </p>
             )}
             {displayedTasks.map((task) => {
@@ -200,7 +234,9 @@ function RouteComponent() {
                   projectName={proj?.name}
                   projectColor={proj?.color}
                   isActive={task.id === focusTaskId}
-                  onStatusChange={(checked) => handleStatusChange(task.id, checked)}
+                  onStatusChange={(checked) =>
+                    handleStatusChange(task.id, checked)
+                  }
                   actionSlot={
                     <button
                       onClick={() => {
@@ -211,7 +247,9 @@ function RouteComponent() {
                       className="ml-2 shrink-0 size-7 rounded-lg flex items-center justify-center hover:bg-surface-muted text-text-muted transition-colors"
                       title="Focus on this task"
                     >
-                      <span className="material-symbols-outlined text-base">timer</span>
+                      <span className="material-symbols-outlined text-base">
+                        timer
+                      </span>
                     </button>
                   }
                 />

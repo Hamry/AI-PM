@@ -2,8 +2,8 @@
 
 ## Core Operational Rules
 - **Review Mode:** Your primary duty is to analyze uncommitted changes (`git diff`). Only provide feedback after I have implemented a feature or fix manually.
-- **No Predictive Generation:** Do not suggest code for features I haven't started. Wait for the diff to be available before offering critiques.
-- **Ownership:** Never rewrite a file. Provide targeted snippets only when a specific "standard" or "alternative" implementation is discussed.
+- **No Predictive Generation:** Do not suggest code for features I haven't started. Wait for the diff to be available before offering critiques. *(Exception: React code in `apps/web` and `shared-ui` is exempt — full code generation is allowed there.)*
+- **Ownership:** Never rewrite a file. Provide targeted snippets only when a specific "standard" or "alternative" implementation is discussed. *(Exception: React files in `apps/web` and `shared-ui` may be fully written or rewritten on request.)*
 
 ## Review & Feedback Guidelines
 - **Standardization:** Critique code against industry-standard patterns (e.g., idiomatic Python, C/C++ memory safety, or Rust ownership). Point out "anti-patterns" immediately.
@@ -17,7 +17,7 @@
     - Audit the `git diff` for logic errors, safety risks, and standards violations.
     - List 1-2 "Standard improvements" (better naming, cleaner syntax).
     - Propose 1 "Alternative architecture" to expand my technical perspective.
-3. **Execution:** I manually refactor based on the discussion. No auto-applying changes. (Only exception to this is documentation changes)
+3. **Execution:** I manually refactor based on the discussion. No auto-applying changes. (Exceptions: documentation changes, and all React code in `apps/web` + `shared-ui`.)
 
 ## Project-Specific Architecture Decisions
 
@@ -34,7 +34,11 @@
 - **ID assignment**: `TaskId` is assigned by the DB via `SERIAL` / `INTEGER PRIMARY KEY AUTOINCREMENT`. The API receives a `TaskDraft` (no ID), inserts it, and reads back the generated ID via `RETURNING id` (Postgres) or `last_insert_rowid()` (SQLite).
 - **Schema**: flat `tasks` table with a self-referential `parent_id` column. Tree retrieval uses a single `WITH RECURSIVE` CTE — do not fetch children with N+1 queries.
 - **Write path**: only `TaskDraft` is ever sent by the client. `Task` (with ID and status) is only ever returned by the server.
-- **Auth**: Clerk (JWT-based). Frontend uses `@clerk/react` (v6+, NOT the old `@clerk/clerk-react`). Backend validates Clerk JWTs in Axum middleware — extract `clerk_id` from claims, look up internal `user_id` in DB. Do not roll custom session logic.
+- **Auth**: Clerk (JWT-based). Frontend uses `@clerk/react` (v6+, NOT the old `@clerk/clerk-react`). Backend validates Clerk JWTs in Axum middleware — decode `kid` from the JWT header, find the matching JWK from the cached JWKS, validate RS256 signature, extract `clerk_id` from `sub` claim. Audience validation is disabled (`validate_aud = false`) because Clerk doesn't set `aud`. Do not roll custom session logic.
+- **JWKS caching**: `AppState` holds `jwks: Arc<RwLock<JwksState>>`. Refresh triggers when cache is empty or older than 24 hours. A second "stale retry" fires if validation fails and the cache is older than 2 minutes (handles key rotation without blocking). `CLERK_JWKS_URL` must be set as an env var.
+- **User upsert**: `get_or_create_user` in `db.rs` uses `INSERT OR IGNORE` then `SELECT` — avoids read-before-write. `email` column in `users` is nullable; populated lazily. The middleware resolves the internal `user_id` and injects it as `Extension<i64>` for all downstream handlers.
+- **User-scoped queries**: all DB functions accept `user_id: i64` and include `WHERE user_id = ?` predicates. Never query tasks without a user scope.
+- **CORS**: `CorsLayer` allows origin `http://localhost:5173`, any method, any header. Applied in the router before `TraceLayer`.
 - **DB path**: read from `DATABASE_URL` env var via `dotenvy`. Falls back to `sqlite://tasks.db?mode=rwc` for local dev. `.env` file lives at `cloud-api/.env`.
 - **Error handling**: `db.rs` uses `anyhow::Error` throughout. All `i64 -> u32` casts use `u32::try_from(...).map_err(...)` — never `as u32`. `TaskStatus` has a `FromStr` impl with `type Err = String`.
 - **Observability**: `tracing-subscriber` with `EnvFilter` initialized first in `main()`. All handlers log errors with `tracing::error!("{:?}", e)` before returning 500. `TraceLayer::new_for_http()` wraps the router for per-request spans.
