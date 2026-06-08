@@ -21,15 +21,19 @@ export type TaskDraft = {
 	description: string,
 	due_date: string | null,
 	estimation: Estimation | null,
-	parent_id: TaskId,
+	parent_id: TaskId | null,
 	metadata: TaskMetadata,
 };
 
 export type TaskId = number;
 
+export type SourceRef = {
+	chat_id: number,
+};
+
 export type TaskMetadata = {
 	tags: string[],
-	derived_from: string,
+	derived_from: SourceRef,
 };
 
 export type TaskStatus = "PendingReview" | "Todo" | "InProgress" | "Completed" | "Archived";

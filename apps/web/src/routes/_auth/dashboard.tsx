@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useUser } from "@clerk/react";
+import { useUser, useAuth } from "@clerk/react";
 import { useState, useEffect, useRef } from "react";
 import {
   DashboardLayout,
@@ -7,112 +7,52 @@ import {
   TaskCard,
   FocusTimer,
   type Task,
-  type TaskStatus,
+  type TaskDraft,
+  type Estimation,
 } from "@fractalist/shared-ui";
-
-import { useAuth } from "@clerk/react";
+import { fetchTasks, createTask, patchTask, patchTaskStatus } from "../../api/tasks";
+import { InlineTaskForm } from "../../components/InlineTaskForm";
+import { InlineEditForm } from "../../components/InlineEditForm";
 
 export const Route = createFileRoute("/_auth/dashboard")({
   component: RouteComponent,
 });
 
-function makeTask(
-  id: number,
-  title: string,
-  status: TaskStatus,
-  opts: Partial<Task> = {}
-): Task {
-  return {
-    id,
-    title,
-    description: "",
-    status,
-    due_date: null,
-    estimation: null,
-    parent_id: null,
-    metadata: { tags: [], derived_from: "manual" },
-    ...opts,
-  };
-}
-
-const MOCK_TASKS: Task[] = [
-  makeTask(1, "Draft presentation for Q4 roadmap", "InProgress", {
-    estimation: {
-      predicted_minutes: 25,
-      confidence_score: 0.85,
-      last_updated: "",
-    },
-    metadata: { tags: [], derived_from: "manual" },
-  }),
-  makeTask(2, "Research competitive dashboard layouts", "Todo", {
-    metadata: { tags: ["BREAKDOWN"], derived_from: "ai" },
-  }),
-  makeTask(3, "Prepare weekly sync agenda", "Todo", {
-    due_date: new Date(new Date().setHours(14, 0, 0, 0)).toISOString(),
-    metadata: { tags: [], derived_from: "manual" },
-  }),
-  makeTask(4, "Refine system architecture", "PendingReview", {
-    estimation: {
-      predicted_minutes: 60,
-      confidence_score: 0.7,
-      last_updated: "",
-    },
-    metadata: { tags: ["DESIGN"], derived_from: "ai" },
-  }),
-  makeTask(5, "Developer feedback review", "Todo", {
-    estimation: {
-      predicted_minutes: 30,
-      confidence_score: 0.9,
-      last_updated: "",
-    },
-    metadata: { tags: [], derived_from: "manual" },
-  }),
-  makeTask(6, "Review system documentation", "Completed", {
-    metadata: { tags: [], derived_from: "manual" },
-  }),
-];
-
-const MOCK_PROJECTS = [
-  { id: "p1", name: "Marketing Site", color: "#42d411" },
-  { id: "p2", name: "Q4 Roadmap", color: "#3b82f6" },
-  { id: "p3", name: "Design System", color: "#f59e0b" },
-];
-
-const TASK_PROJECT_MAP: Record<number, { name: string; color: string }> = {
-  1: { name: "Marketing Site", color: "#42d411" },
-  2: { name: "Design System", color: "#f59e0b" },
-  3: { name: "Q4 Roadmap", color: "#3b82f6" },
-  4: { name: "Marketing Site", color: "#42d411" },
-  5: { name: "Q4 Roadmap", color: "#3b82f6" },
-  6: { name: "Design System", color: "#f59e0b" },
-};
-
 const FOCUS_SESSION_SECONDS = 25 * 60;
 
 function RouteComponent() {
   const { user } = useUser();
-  const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
-  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [focusTaskId, setFocusTaskId] = useState<number>(1);
-  const [secondsRemaining, setSecondsRemaining] = useState(
-    FOCUS_SESSION_SECONDS
-  );
-  const [timerRunning, setTimerRunning] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { getToken } = useAuth();
+
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
+  const [focusTaskId, setFocusTaskId] = useState<number | null>(null);
+  const [secondsRemaining, setSecondsRemaining] = useState(FOCUS_SESSION_SECONDS);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [showInlineForm, setShowInlineForm] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     async function loadTasks() {
-      const token = await getToken();
-      const res = await fetch("http://localhost:3000/tasks", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setTasks(data);
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const data = await fetchTasks(getToken);
+        setTasks(data);
+        if (data.length > 0) setFocusTaskId(data[0].id);
+      } catch (err) {
+        setLoadError("Could not load tasks. Is the backend running?");
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
     }
     loadTasks();
   }, []);
+
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(() => {
@@ -133,11 +73,34 @@ function RouteComponent() {
   }, [timerRunning]);
 
   function handleStatusChange(taskId: number, checked: boolean) {
+    const newStatus = checked ? "Completed" : "Todo";
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId ? { ...t, status: checked ? "Completed" : "Todo" } : t
-      )
+      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
     );
+    patchTaskStatus(getToken, taskId, newStatus).catch((err) =>
+      console.error("Failed to update task status:", err)
+    );
+  }
+
+  async function handleCreateTask(draft: TaskDraft) {
+    const newTask = await createTask(getToken, draft);
+    setTasks((prev) => [newTask, ...prev]);
+    if (focusTaskId === null) setFocusTaskId(newTask.id);
+    setShowInlineForm(false);
+  }
+
+  async function handleUpdateTask(
+    id: number,
+    update: {
+      title?: string;
+      description?: string;
+      due_date?: string | null;
+      estimation?: Estimation | null;
+    }
+  ) {
+    const updated = await patchTask(getToken, id, update);
+    setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    setEditingTaskId(null);
   }
 
   const displayedTasks = tasks.filter((t) =>
@@ -147,6 +110,9 @@ function RouteComponent() {
   );
 
   const focusTask = tasks.find((t) => t.id === focusTaskId) ?? null;
+  const focusTaskSeconds = focusTask?.estimation
+    ? focusTask.estimation.predicted_minutes * 60
+    : FOCUS_SESSION_SECONDS;
 
   const upNextTasks = tasks
     .filter(
@@ -168,115 +134,155 @@ function RouteComponent() {
   });
 
   return (
-    <DashboardLayout
-      sidebar={
-        <Sidebar
-          projects={MOCK_PROJECTS}
-          activeProjectId={activeProjectId ?? undefined}
-          onProjectClick={(id) =>
-            setActiveProjectId((prev) => (prev === id ? null : id))
-          }
-          aiSuggestion="You have 3 tasks that can be optimized today."
-        />
-      }
-      mainSlot={
-        <div className="flex flex-col h-full overflow-hidden">
-          <div className="mb-5 shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-text-primary">
-                  {greeting},{" "}
-                  <span className="font-extrabold">
-                    {user?.firstName ?? "there"}
-                  </span>
-                </h1>
-                <p className="text-sm text-text-muted mt-0.5">{dateStr}</p>
+    <>
+      <DashboardLayout
+        sidebar={
+          <Sidebar
+            aiSuggestion="You have tasks waiting. Pick one and start a focus session."
+          />
+        }
+        mainSlot={
+          <div className="flex flex-col h-full overflow-hidden">
+            <div className="mb-5 shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-bold text-text-primary">
+                    {greeting},{" "}
+                    <span className="font-extrabold">
+                      {user?.firstName ?? "there"}
+                    </span>
+                  </h1>
+                  <p className="text-sm text-text-muted mt-0.5">{dateStr}</p>
+                </div>
+                <button
+                  onClick={() => setShowInlineForm(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-text-primary text-surface text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  <span className="material-symbols-outlined text-[16px]">add</span>
+                  New Task
+                </button>
               </div>
-              <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-text-primary text-surface text-sm font-medium hover:opacity-90 transition-opacity">
-                <span className="material-symbols-outlined text-[16px]">
-                  add
-                </span>
-                New Task
-              </button>
+            </div>
+
+            <div className="flex gap-1 mb-4 shrink-0">
+              {(["active", "completed"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === tab
+                      ? "bg-text-primary text-surface"
+                      : "text-text-secondary hover:bg-surface-muted"
+                  }`}
+                >
+                  {tab === "active" ? "Active Tasks" : "Completed"}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2 overflow-y-auto flex-1 pr-1">
+              {showInlineForm && (
+                <InlineTaskForm
+                  onSubmit={handleCreateTask}
+                  onCancel={() => setShowInlineForm(false)}
+                />
+              )}
+
+              {isLoading && (
+                <div className="flex flex-col gap-2">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-16 rounded-xl bg-surface-muted animate-pulse"
+                    />
+                  ))}
+                </div>
+              )}
+
+              {!isLoading && loadError && (
+                <p className="text-sm text-red-500 py-6 text-center">{loadError}</p>
+              )}
+
+              {!isLoading && !loadError && displayedTasks.length === 0 && (
+                <p className="text-text-muted text-sm py-12 text-center">
+                  {activeTab === "completed"
+                    ? "No completed tasks yet."
+                    : "No active tasks. Add one!"}
+                </p>
+              )}
+
+              {!isLoading &&
+                displayedTasks.map((task) =>
+                  editingTaskId === task.id ? (
+                    <InlineEditForm
+                      key={task.id}
+                      task={task}
+                      onSubmit={handleUpdateTask}
+                      onCancel={() => setEditingTaskId(null)}
+                    />
+                  ) : (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      isActive={task.id === focusTaskId}
+                      onStatusChange={(checked) =>
+                        handleStatusChange(task.id, checked)
+                      }
+                      actionSlot={
+                        <>
+                          <button
+                            onClick={() => setEditingTaskId(task.id)}
+                            className="ml-1 shrink-0 size-7 rounded-lg flex items-center justify-center hover:bg-surface-muted text-text-muted transition-colors"
+                            title="Edit task"
+                          >
+                            <span className="material-symbols-outlined text-base">
+                              edit
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              const secs = task.estimation
+                                ? task.estimation.predicted_minutes * 60
+                                : FOCUS_SESSION_SECONDS;
+                              setFocusTaskId(task.id);
+                              setSecondsRemaining(secs);
+                              setTimerRunning(true);
+                            }}
+                            className="ml-1 shrink-0 size-7 rounded-lg flex items-center justify-center hover:bg-surface-muted text-text-muted transition-colors"
+                            title="Focus on this task"
+                          >
+                            <span className="material-symbols-outlined text-base">
+                              timer
+                            </span>
+                          </button>
+                        </>
+                      }
+                    />
+                  )
+                )}
             </div>
           </div>
-
-          <div className="flex gap-1 mb-4 shrink-0">
-            {(["active", "completed"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeTab === tab
-                    ? "bg-text-primary text-surface"
-                    : "text-text-secondary hover:bg-surface-muted"
-                }`}
-              >
-                {tab === "active" ? "Active Tasks" : "Completed"}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-2 overflow-y-auto flex-1 pr-1">
-            {displayedTasks.length === 0 && (
-              <p className="text-text-muted text-sm py-12 text-center">
-                {activeTab === "completed"
-                  ? "No completed tasks yet."
-                  : "All caught up!"}
-              </p>
-            )}
-            {displayedTasks.map((task) => {
-              const proj = TASK_PROJECT_MAP[task.id];
-              return (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  projectName={proj?.name}
-                  projectColor={proj?.color}
-                  isActive={task.id === focusTaskId}
-                  onStatusChange={(checked) =>
-                    handleStatusChange(task.id, checked)
-                  }
-                  actionSlot={
-                    <button
-                      onClick={() => {
-                        setFocusTaskId(task.id);
-                        setSecondsRemaining(FOCUS_SESSION_SECONDS);
-                        setTimerRunning(false);
-                      }}
-                      className="ml-2 shrink-0 size-7 rounded-lg flex items-center justify-center hover:bg-surface-muted text-text-muted transition-colors"
-                      title="Focus on this task"
-                    >
-                      <span className="material-symbols-outlined text-base">
-                        timer
-                      </span>
-                    </button>
-                  }
-                />
-              );
-            })}
-          </div>
-        </div>
-      }
-      rightSlot={
-        <FocusTimer
-          activeTaskTitle={focusTask?.title}
-          totalSeconds={FOCUS_SESSION_SECONDS}
-          secondsRemaining={secondsRemaining}
-          isRunning={timerRunning}
-          upNextTasks={upNextTasks}
-          onStart={() => setTimerRunning(true)}
-          onPause={() => setTimerRunning(false)}
-          onStop={() => {
-            setTimerRunning(false);
-            setSecondsRemaining(FOCUS_SESSION_SECONDS);
-          }}
-          onRestart={() => {
-            setSecondsRemaining(FOCUS_SESSION_SECONDS);
-            setTimerRunning(true);
-          }}
-        />
-      }
-    />
+        }
+        rightSlot={
+          <FocusTimer
+            activeTaskTitle={focusTask?.title}
+            totalSeconds={focusTaskSeconds}
+            secondsRemaining={secondsRemaining}
+            isRunning={timerRunning}
+            upNextTasks={upNextTasks}
+            onStart={() => setTimerRunning(true)}
+            onPause={() => setTimerRunning(false)}
+            onStop={() => {
+              setTimerRunning(false);
+              setSecondsRemaining(focusTaskSeconds);
+            }}
+            onRestart={() => {
+              setSecondsRemaining(focusTaskSeconds);
+              setTimerRunning(true);
+            }}
+          />
+        }
+      />
+    </>
   );
 }

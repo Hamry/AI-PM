@@ -4,8 +4,6 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 
 interface TaskCardProps {
   task: Task;
-  projectName?: string;
-  projectColor?: string;
   isActive?: boolean;
   actionSlot?: React.ReactNode;
   onStatusChange?: (checked: boolean) => void;
@@ -23,18 +21,21 @@ function statusBadgeClasses(status: TaskStatus): string {
 }
 
 function formatTimeInfo(task: Task): string | null {
-  if (task.due_date) {
-    const d = new Date(task.due_date);
-    return `Due ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-  }
+  const parts: string[] = [];
   if (task.estimation) {
     const m = task.estimation.predicted_minutes;
-    return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60 > 0 ? `${m % 60}m` : ""}`.trim() : `${m}m remaining`;
+    parts.push(m >= 60
+      ? `${Math.floor(m / 60)}h${m % 60 > 0 ? ` ${m % 60}m` : ""}`
+      : `${m}m`);
   }
-  return null;
+  if (task.due_date) {
+    const d = new Date(task.due_date);
+    parts.push(`Due ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-export function TaskCard({ task, projectName, projectColor, isActive, actionSlot, onStatusChange }: TaskCardProps) {
+export function TaskCard({ task, isActive, actionSlot, onStatusChange }: TaskCardProps) {
   const isCompleted = task.status === "Completed";
   const timeInfo = formatTimeInfo(task);
 
@@ -81,19 +82,15 @@ export function TaskCard({ task, projectName, projectColor, isActive, actionSlot
           </span>
         </div>
 
-        {(projectName || timeInfo) && (
-          <div className="flex items-center gap-1.5 mt-1">
-            {projectName && (
-              <>
-                <span
-                  className="size-2 rounded-full shrink-0"
-                  style={{ backgroundColor: projectColor ?? "#94a3b8" }}
-                />
-                <span className="text-xs text-text-secondary">{projectName}</span>
-              </>
+        {(task.description || timeInfo) && (
+          <div className="flex items-center gap-1.5 mt-1 min-w-0">
+            {task.description && (
+              <span className="text-xs text-text-muted italic truncate">
+                {task.description}
+              </span>
             )}
-            {projectName && timeInfo && <span className="text-text-muted text-xs">•</span>}
-            {timeInfo && <span className="text-xs text-text-muted">{timeInfo}</span>}
+            {task.description && timeInfo && <span className="text-text-muted text-xs shrink-0">•</span>}
+            {timeInfo && <span className="text-xs text-text-muted shrink-0">{timeInfo}</span>}
           </div>
         )}
 

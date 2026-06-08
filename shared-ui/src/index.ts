@@ -8,4 +8,4 @@ export { CtaSection } from "./components/CtaSection";
 export { Footer } from "./components/Footer";
 export { LandingPage } from "./pages/LandingPage";
 export { DashboardLayout } from "./pages/DashboardLayout";
-export type { Task, TaskStatus, TaskId, TaskMetadata, Estimation, TaskDraft } from "./types/bindings";
+export type { Task, TaskStatus, TaskId, TaskMetadata, Estimation, TaskDraft, SourceRef } from "./types/bindings";
